@@ -15,10 +15,6 @@ bin/
 # Go workspace file
 go.work
 
-# Storage directories
-storage/
-functions/
-
 # IDE
 .vscode/
 .idea/
