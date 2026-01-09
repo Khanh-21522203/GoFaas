@@ -85,7 +85,7 @@ func (r *ContainerRuntime) Execute(ctx context.Context, spec ExecutionSpec) (*Ex
 	defer os.RemoveAll(execDir) // Cleanup after execution
 
 	// Write function code to file
-	codePath, err := r.writeCodeToFile(execDir, spec.Runtime, spec.Code)
+	_, err := r.writeCodeToFile(execDir, spec.Runtime, spec.Code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write function code: %w", err)
 	}

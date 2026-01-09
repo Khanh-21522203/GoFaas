@@ -76,7 +76,6 @@ func main() {
 
 	// Initialize runtime based on configuration
 	var rt runtime.Runtime
-	var err error
 
 	if cfg.Worker.UseContainer {
 		logger.Info("Initializing container-based runtime")

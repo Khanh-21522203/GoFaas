@@ -62,7 +62,7 @@ func (s *Service) InvokeAsync(ctx context.Context, req InvocationRequest) (*Invo
 		CreatedAt:  time.Now(),
 	}
 
-	if err := s.invocationRepo.Create(ctx, invocation); err != nil {
+	if err := s.invocationRepo.CreateInvocation(ctx, invocation); err != nil {
 		return nil, err
 	}
 
@@ -111,7 +111,7 @@ func (s *Service) InvokeAsync(ctx context.Context, req InvocationRequest) (*Invo
 
 // GetResult retrieves invocation result
 func (s *Service) GetResult(ctx context.Context, invocationID string) (*types.Invocation, error) {
-	invocation, err := s.invocationRepo.GetByID(ctx, invocationID)
+	invocation, err := s.invocationRepo.GetInvocationByID(ctx, invocationID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (s *Service) GetResult(ctx context.Context, invocationID string) (*types.In
 
 // ListInvocations lists invocations with filters
 func (s *Service) ListInvocations(ctx context.Context, filter metadata.InvocationFilter) ([]*types.Invocation, error) {
-	invocations, err := s.invocationRepo.List(ctx, filter)
+	invocations, err := s.invocationRepo.ListInvocations(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (s *Service) ListInvocations(ctx context.Context, filter metadata.Invocatio
 
 // UpdateInvocationStatus updates invocation status (used by workers)
 func (s *Service) UpdateInvocationStatus(ctx context.Context, invocationID string, status types.ExecutionStatus) error {
-	invocation, err := s.invocationRepo.GetByID(ctx, invocationID)
+	invocation, err := s.invocationRepo.GetInvocationByID(ctx, invocationID)
 	if err != nil {
 		return err
 	}
@@ -147,12 +147,12 @@ func (s *Service) UpdateInvocationStatus(ctx context.Context, invocationID strin
 		invocation.CompletedAt = &now
 	}
 
-	return s.invocationRepo.Update(ctx, invocation)
+	return s.invocationRepo.UpdateInvocation(ctx, invocation)
 }
 
 // UpdateInvocationResult updates invocation result (used by workers)
 func (s *Service) UpdateInvocationResult(ctx context.Context, invocationID string, result ExecutionResult) error {
-	invocation, err := s.invocationRepo.GetByID(ctx, invocationID)
+	invocation, err := s.invocationRepo.GetInvocationByID(ctx, invocationID)
 	if err != nil {
 		return err
 	}
@@ -168,5 +168,5 @@ func (s *Service) UpdateInvocationResult(ctx context.Context, invocationID strin
 	}
 	invocation.CompletedAt = &now
 
-	return s.invocationRepo.Update(ctx, invocation)
+	return s.invocationRepo.UpdateInvocation(ctx, invocation)
 }
