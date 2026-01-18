@@ -13,6 +13,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"GoFaas/internal/api/controller"
+	"GoFaas/internal/api/middleware"
 	"GoFaas/internal/config"
 	"GoFaas/internal/core/function"
 	"GoFaas/internal/core/invocation"
@@ -85,11 +86,24 @@ func main() {
 	functionHandler := controller.NewFunctionHandler(functionService, logger)
 	invocationHandler := controller.NewInvocationHandler(invocationService, logger)
 
+	// Initialize auth middleware and handlers
+	authMiddleware := middleware.NewAuthMiddleware(middleware.AuthConfig{
+		JWTSecret:     "change-me-in-production", // TODO: Load from config
+		TokenDuration: 24 * time.Hour,
+		Logger:        logger,
+	})
+	authHandler := controller.NewAuthHandler(authMiddleware, logger)
+	authzMiddleware := middleware.NewAuthzMiddleware(logger)
+
 	// Initialize HTTP server
 	server := controller.NewServer(controller.Config{
 		Addr:              cfg.Server.Addr,
 		FunctionHandler:   functionHandler,
 		InvocationHandler: invocationHandler,
+		AuthHandler:       authHandler,
+		AuthMiddleware:    authMiddleware,
+		AuthzMiddleware:   authzMiddleware,
+		RedisClient:       redisClient,
 		Logger:            logger,
 	})
 

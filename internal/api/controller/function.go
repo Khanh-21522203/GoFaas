@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"GoFaas/internal/api/middleware"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -63,13 +64,41 @@ func (h *FunctionHandler) UpdateFunction(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		common.WriteError(w, errors.InternalError("user_id not in context"))
+		return
+	}
+
+	// Get existing function
+	fn, err := h.service.GetFunction(r.Context(), id)
+	if err != nil {
+		common.WriteError(w, err)
+		return
+	}
+
+	// Check ownership (unless admin)
+	perms, _ := middleware.GetPermissions(r.Context())
+	isAdmin := contains(perms, string(middleware.PermissionAdminAll))
+
+	// TODO: Implement FunctionPermission logic, add FunctionOwner in Function Type too
+	if fn.CreatedBy != userID && !isAdmin {
+		common.WriteError(w, errors.NewAppError(
+			errors.ErrCodeForbidden,
+			"You can only update your own functions",
+			"",
+		))
+		return
+	}
+
 	var req function.UpdateFunctionRequest
 	if err := common.ParseJSON(r, &req); err != nil {
 		common.WriteError(w, err)
 		return
 	}
 
-	fn, err := h.service.UpdateFunction(r.Context(), id, req)
+	fn, err = h.service.UpdateFunction(r.Context(), id, req)
 	if err != nil {
 		common.WriteError(w, err)
 		return
@@ -121,4 +150,14 @@ func (h *FunctionHandler) ListFunctions(w http.ResponseWriter, r *http.Request) 
 	}
 
 	common.WriteJSON(w, http.StatusOK, functions)
+}
+
+// contains checks if a string slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

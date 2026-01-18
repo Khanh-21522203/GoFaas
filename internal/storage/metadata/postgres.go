@@ -175,7 +175,7 @@ func (r *PostgresRepository) List(ctx context.Context, filter FunctionFilter) ([
 		FROM functions
 		WHERE 1=1`
 
-	args := []interface{}{}
+	var args []interface{}
 	argPos := 1
 
 	if filter.Runtime != nil {

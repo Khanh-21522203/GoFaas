@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"GoFaas/internal/api/middleware"
 	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 
 	"GoFaas/internal/observability/logging"
@@ -16,6 +18,10 @@ type Server struct {
 	addr              string
 	functionHandler   *FunctionHandler
 	invocationHandler *InvocationHandler
+	authHandler       *AuthHandler
+	authMiddleware    *middleware.AuthMiddleware
+	authzMiddleware   *middleware.AuthzMiddleware
+	redisClient       *redis.Client
 	logger            logging.Logger
 	server            *http.Server
 }
@@ -25,6 +31,10 @@ type Config struct {
 	Addr              string
 	FunctionHandler   *FunctionHandler
 	InvocationHandler *InvocationHandler
+	AuthHandler       *AuthHandler
+	AuthMiddleware    *middleware.AuthMiddleware
+	AuthzMiddleware   *middleware.AuthzMiddleware
+	RedisClient       *redis.Client
 	Logger            logging.Logger
 }
 
@@ -34,6 +44,10 @@ func NewServer(cfg Config) *Server {
 		addr:              cfg.Addr,
 		functionHandler:   cfg.FunctionHandler,
 		invocationHandler: cfg.InvocationHandler,
+		authHandler:       cfg.AuthHandler,
+		authMiddleware:    cfg.AuthMiddleware,
+		authzMiddleware:   cfg.AuthzMiddleware,
+		redisClient:       cfg.RedisClient,
 		logger:            cfg.Logger,
 	}
 }
@@ -76,18 +90,65 @@ func (s *Server) setupRoutes() *mux.Router {
 
 	// Health check
 	router.HandleFunc("/health", s.healthCheck).Methods("GET")
+	router.HandleFunc("/auth/login", s.authHandler.Login).Methods("POST")
+
+	// Protected routes (auth required)
+	protected := router.PathPrefix("/").Subrouter()
+	protected.Use(s.authMiddleware.Middleware)
 
 	// Function management routes
-	router.HandleFunc("/functions", s.functionHandler.CreateFunction).Methods("POST")
-	router.HandleFunc("/functions", s.functionHandler.ListFunctions).Methods("GET")
-	router.HandleFunc("/functions/{id}", s.functionHandler.GetFunction).Methods("GET")
-	router.HandleFunc("/functions/{id}", s.functionHandler.UpdateFunction).Methods("PUT")
-	router.HandleFunc("/functions/{id}", s.functionHandler.DeleteFunction).Methods("DELETE")
+	protected.Handle("/functions",
+		s.authzMiddleware.RequirePermission(middleware.PermissionFunctionCreate)(
+			http.HandlerFunc(s.functionHandler.CreateFunction),
+		)).Methods("POST")
+
+	protected.Handle("/functions",
+		s.authzMiddleware.RequirePermission(middleware.PermissionFunctionRead)(
+			http.HandlerFunc(s.functionHandler.ListFunctions),
+		)).Methods("GET")
+
+	protected.Handle("/functions/{id}",
+		s.authzMiddleware.RequirePermission(middleware.PermissionFunctionRead)(
+			http.HandlerFunc(s.functionHandler.GetFunction),
+		)).Methods("GET")
+
+	protected.Handle("/functions/{id}",
+		s.authzMiddleware.RequirePermission(middleware.PermissionFunctionUpdate)(
+			http.HandlerFunc(s.functionHandler.UpdateFunction),
+		)).Methods("PUT")
+
+	protected.Handle("/functions/{id}",
+		s.authzMiddleware.RequirePermission(middleware.PermissionFunctionDelete)(
+			http.HandlerFunc(s.functionHandler.DeleteFunction),
+		)).Methods("DELETE")
 
 	// Invocation routes
-	router.HandleFunc("/invoke", s.invocationHandler.InvokeFunction).Methods("POST")
+	protected.Handle("/invoke",
+		s.authzMiddleware.RequirePermission(middleware.PermissionFunctionInvoke)(
+			http.HandlerFunc(s.invocationHandler.InvokeFunction),
+		)).Methods("POST")
 	router.HandleFunc("/invocations/{id}", s.invocationHandler.GetInvocationResult).Methods("GET")
 	router.HandleFunc("/invocations", s.invocationHandler.ListInvocations).Methods("GET")
+
+	corsMiddleware := middleware.NewCORSMiddleware(middleware.CORSConfig{
+		AllowedOrigins:   []string{"https://app.example.com", "http://localhost:3000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		ExposedHeaders:   []string{"X-RateLimit-Limit", "X-RateLimit-Remaining"},
+		AllowCredentials: true,
+		MaxAge:           3600,
+		Logger:           s.logger,
+	})
+	router.Use(corsMiddleware.Middleware)
+
+	standardLimiter := middleware.NewRateLimitMiddleware(middleware.RateLimitConfig{
+		RedisClient:       s.redisClient,
+		Logger:            s.logger,
+		RequestsPerWindow: 100,
+		WindowDuration:    time.Minute,
+	})
+
+	router.Use(standardLimiter.Middleware)
 
 	// Add logging middleware
 	router.Use(s.loggingMiddleware)

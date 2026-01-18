@@ -119,3 +119,21 @@ func getEnvBool(key string, defaultValue bool) bool {
 	}
 	return defaultValue
 }
+
+type SecurityConfig struct {
+	JWTSecret     string        `env:"JWT_SECRET" envDefault:"change-me-in-production"`
+	TokenDuration time.Duration `env:"TOKEN_DURATION" envDefault:"24h"`
+}
+
+type RateLimitConfig struct {
+	Enabled           bool          `env:"RATE_LIMIT_ENABLED" envDefault:"true"`
+	RequestsPerWindow int           `env:"RATE_LIMIT_REQUESTS" envDefault:"100"`
+	WindowDuration    time.Duration `env:"RATE_LIMIT_WINDOW" envDefault:"1m"`
+}
+
+type CORSConfig struct {
+	Enabled          bool     `env:"CORS_ENABLED" envDefault:"true"`
+	AllowedOrigins   []string `env:"CORS_ALLOWED_ORIGINS" envDefault:"*"`
+	AllowCredentials bool     `env:"CORS_ALLOW_CREDENTIALS" envDefault:"true"`
+	MaxAge           int      `env:"CORS_MAX_AGE" envDefault:"3600"`
+}
